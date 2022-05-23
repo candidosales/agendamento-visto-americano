@@ -84,6 +84,7 @@ const bot = async (): Promise<void> => {
       page,
       "Não foi possível enviar o formulário. Tente novamente"
     );
+    return;
   }
 
   console.log(`Página de perfil ...`);
@@ -112,30 +113,34 @@ const bot = async (): Promise<void> => {
       selectors.appointmentPage.selectCity
     );
     selectCity.select(selectors.appointmentPage.selectCity, CITIES[setup.city]);
-    await page.waitForTimeout(5000);
   } catch (e) {
     await handleError(
       e,
       page,
       "Error ao tentar carregar o form. Tente novamente"
     );
+    return;
   }
 
+  await page.waitForTimeout(5000);
+
+  // BUG
   try {
     const inputDate = await page.waitForSelector(
       selectors.appointmentPage.inputDate
     );
-    await inputDate.click();
-    await page.waitForSelector(selectors.appointmentPage.datepicker);
-    await printscreen(page);
+    await page.click(selectors.appointmentPage.inputDate);
   } catch (e) {
     await handleError(
       e,
       page,
       "Error ao tentar carregar o input de data. Tente novamente"
     );
+    return;
   }
 
+  await page.waitForSelector(selectors.appointmentPage.datepicker);
+  await printscreen(page);
   let datesResults: DateAvailable[] = [];
 
   while (datesResults.length === 0) {
