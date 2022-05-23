@@ -1,12 +1,20 @@
-import { format, getUnixTime } from "date-fns";
+import { getUnixTime } from "date-fns";
 import puppeteer, { Browser } from "puppeteer";
+import { CITIES, MONTHS } from "./constants";
+
+export interface DateAvailable {
+  year: string;
+  month: string;
+  date: string;
+}
 
 let browser: Browser;
 const timeout = 3000;
 
-const credentials = {
+const setup = {
   email: "gdsmonteiro@hotmail.com",
   password: "canada2022",
+  city: CITIES["Sao Paulo"],
 };
 
 const selectors = {
@@ -19,15 +27,12 @@ const selectors = {
   profilePage: {
     continueButton: "a.button.primary",
   },
-  bookingPage: {
-    firstAccordionItem: "ul.accordion>li",
-    makeAppointmentButton: "a.button.small.primary.small-only-expanded",
-  },
   appointmentPage: {
     selectCity: 'select[id="appointments_consulate_appointment_facility_id"]',
     inputDate: 'input[id="appointments_consulate_appointment_date"]',
     datepicker: 'div[id="ui-datepicker-div"]',
     tableDatepicker: "table.ui-datepicker-calendar",
+    nextMonthButton: 'div.ui-datepicker-group a[data-handler="next"]',
     datesAvailable: 'table.ui-datepicker-calendar td[data-handler="selectDay"]',
   },
 };
@@ -48,27 +53,17 @@ const bot = async (): Promise<void> => {
 
   console.log(`Autenticando ...`);
 
-  await page.waitForSelector(selectors.loginForm.inputEmail);
-  await page.$eval(
-    selectors.loginForm.inputEmail,
-    (el: HTMLInputElement, code: string) => {
-      return (el.value = code);
-    },
-    credentials.email
-  );
+  const inputEmail = await page.waitForSelector(selectors.loginForm.inputEmail);
+  await inputEmail.type(setup.email);
 
-  await page.waitForSelector(selectors.loginForm.inputPassword);
-  await page.$eval(
-    selectors.loginForm.inputPassword,
-    (el: HTMLInputElement, code: string) => {
-      return (el.value = code);
-    },
-    credentials.password
+  const inputPassword = await page.waitForSelector(
+    selectors.loginForm.inputPassword
   );
+  await inputPassword.type(setup.password);
   await page.click(selectors.loginForm.checkBoxPolicyConfirmed);
 
   try {
-    console.log(`Enviar form ...`);
+    console.log(`- Enviando formulário ...`);
 
     await Promise.all([
       page.click(selectors.loginForm.submit),
@@ -83,85 +78,106 @@ const bot = async (): Promise<void> => {
   }
 
   console.log(`Página de perfil ...`);
-
-  await page.waitForSelector(selectors.profilePage.continueButton);
+  const continueButton = await page.waitForSelector(
+    selectors.profilePage.continueButton
+  );
   await Promise.all([
-    page.click(selectors.profilePage.continueButton),
+    continueButton.click(),
     page.waitForNavigation({
       waitUntil: "networkidle2",
       timeout: timeout,
     }),
   ]);
 
-  console.log(`Página de agendamento ...`);
-  await page.waitForSelector(selectors.bookingPage.firstAccordionItem);
-  await page.click(selectors.bookingPage.firstAccordionItem);
+  console.log(`Redirecionando para a página de agendamento ...`);
+  const urlAppointment = page.url().replace("continue_actions", "appointment");
+  await page.goto(urlAppointment, {
+    waitUntil: "load",
+    timeout: timeout,
+  });
 
-  await Promise.all([
-    page.click(selectors.bookingPage.makeAppointmentButton),
-    page.waitForNavigation({
-      waitUntil: "networkidle2",
-      timeout: timeout,
-    }),
-  ]);
+  await printscreen(page, "-agendamento");
 
-  console.log(`Página de agendamento entrevista ...`);
-  await page.waitForSelector(selectors.appointmentPage.selectCity);
+  try {
+    const selectCity = await page.waitForSelector(
+      selectors.appointmentPage.selectCity
+    );
+    selectCity.select(selectors.appointmentPage.selectCity, setup.city);
+    await page.waitForTimeout(5000);
+  } catch (e) {
+    console.info("Error ao tentar carregar o form, tente novamente");
+    console.error(e.message);
+    await page.close();
+  }
 
-  // 54 Brasília - 128 Porto Alegre - 57 Recife - 55 Rio de Janeiro - 56 Sao Paulo
-  await page.select(selectors.appointmentPage.selectCity, "57");
+  try {
+    const inputDate = await page.waitForSelector(
+      selectors.appointmentPage.inputDate
+    );
+    await inputDate.click();
+    await page.waitForSelector(selectors.appointmentPage.datepicker);
+    await printscreen(page);
+  } catch (e) {
+    console.info("Error ao tentar carregar o input de data. Tente novamente");
+    console.error(e.message);
+    await page.close();
+  }
 
-  // await Promise.all([
-  //   page.select(selectors.appointmentPage.selectCity, "57"),
-  //   page.waitForNavigation({
-  //     waitUntil: "networkidle2",
-  //     timeout: timeout,
-  //   }),
-  // ]);
+  let datesResults: DateAvailable[] = [];
 
-  // await page.evaluate((selectors) => {
-  //   const example = document.querySelector(
-  //     selectors.appointmentPage.selectCity
-  //   );
-  //   const example_options = example.querySelectorAll("option");
-  //   let selected_option;
+  while (datesResults.length === 0) {
+    let datesSelector = [];
+    try {
+      datesSelector = await page.evaluate(() => {
+        const elements = document.querySelectorAll(
+          'table.ui-datepicker-calendar td[data-handler="selectDay"]'
+        );
 
-  //   example_options.forEach((option) => {
-  //     if (option.text === "Recife") {
-  //       selected_option = option;
-  //     }
-  //   });
+        return Array.from(elements).map((element) => {
+          return {
+            month: element.attributes["data-month"].value,
+            year: element.attributes["data-year"].value,
+            //@ts-ignore
+            date: element?.innerText,
+          } as DateAvailable;
+        }); // as you see, now this function returns array of texts instead of Array of elements
+      });
 
-  //   if (selected_option) {
-  //     selected_option.selected = true;
-  //   }
-  // }, selectors);
+      if (datesSelector.length > 0) {
+        await printscreen(page, "-resultado");
+      }
+    } catch (e) {
+      console.error(e.message);
+      console.log(`- Próximo mês ...`);
+      await page.click(selectors.appointmentPage.nextMonthButton);
+      await printscreen(page);
+      continue;
+    }
 
-  // await page.waitForTimeout(3000);
+    if (datesSelector.length === 0) {
+      console.log(`- Próximo mês ...`);
+      await page.click(selectors.appointmentPage.nextMonthButton);
+      await printscreen(page);
+    } else {
+      datesResults = datesSelector;
+    }
+  }
 
-  // page.evaluate((btnSelector) => {
-  //   // this executes in the page
-  //   document.querySelector(btnSelector).click();
-  // }, selectors.appointmentPage.inputDate);
+  console.log("Datas disponíves:", datesResults);
 
-  await page.waitForSelector(selectors.appointmentPage.inputDate);
-  await page.click(selectors.appointmentPage.inputDate);
-  await page.waitForSelector(selectors.appointmentPage.datepicker);
-  await printscreen(page);
-
-  // const dates = await page.waitForSelector(
-  //   selectors.appointmentPage.datesAvailable
-  // );
-
-  // console.log("dates", dates);
+  datesResults.map((results) => {
+    console.log(
+      "results",
+      `${results.date}/${MONTHS[results.month]}/${results.year}`
+    );
+  });
 
   await page.close();
 };
 
-const printscreen = async (page: puppeteer.Page) => {
+const printscreen = async (page: puppeteer.Page, alias = "") => {
+  console.log(`- Printscreen ...`);
   await page.screenshot({
-    path: `./screenshots/${format(new Date(), "yyyy-MM-dd")}/${getUnixTime(
-      new Date()
-    )}.png`,
+    path: `./screenshots/${getUnixTime(new Date())}${alias}.png`,
   });
 };
