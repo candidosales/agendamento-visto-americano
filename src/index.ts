@@ -122,10 +122,11 @@ const bot = async (): Promise<void> => {
     return;
   }
 
-  await page.waitForTimeout(5000);
-
-  // BUG
   try {
+    await printscreen(page, "-agendamento-2");
+
+    await page.waitForTimeout(5000);
+
     const inputDate = await page.waitForSelector(
       selectors.appointmentPage.inputDate
     );
