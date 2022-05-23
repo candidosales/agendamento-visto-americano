@@ -1,6 +1,6 @@
 # Agendamento Visto Americano no Brasil
 
-Script que automatiza a verificação de qual data é a mais recente para agendamento do visto americano
+Script que automatiza a verificação de qual data mais próxima disponível para agendamento do visto americano no Brasil
 
 ## Configuração
 
@@ -20,8 +20,20 @@ const setup = {
 };
 ```
 
+A lista de cidades é:
+
+- `Brasília`;
+- `Porto Alegre`;
+- `Recife`;
+- `Rio de Janeiro`;
+- `Sao Paulo`;
+
 ## Executar
 
 ```bash
 npm start
 ```
+
+Resultado
+
+![image](./images/result.png)
