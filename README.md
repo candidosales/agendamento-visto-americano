@@ -1,6 +1,6 @@
 # Agendamento Visto Americano no Brasil
 
-Script que automatiza a verificação de qual data mais próxima disponível para agendamento do visto americano no Brasil
+Script que automatiza a verificação de qual data mais próxima disponível para agendamento da entrevista do visto americano no Brasil
 
 ## Configuração
 
