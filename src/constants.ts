@@ -20,3 +20,8 @@ export const CITIES = {
   "Rio de Janeiro": "55",
   "Sao Paulo": "56",
 };
+
+export const DEFAULT = {
+  email: "******@hotmail.com",
+  password: "******",
+};

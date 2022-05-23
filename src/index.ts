@@ -1,6 +1,6 @@
 import { getUnixTime } from "date-fns";
 import puppeteer, { Browser } from "puppeteer";
-import { CITIES, MONTHS } from "./constants";
+import { CITIES, DEFAULT, MONTHS } from "./constants";
 
 export interface DateAvailable {
   year: string;
@@ -12,9 +12,9 @@ let browser: Browser;
 const timeout = 3000;
 
 const setup = {
-  email: "gdsmonteiro@hotmail.com",
-  password: "canada2022",
-  city: CITIES["Sao Paulo"],
+  email: DEFAULT.email,
+  password: DEFAULT.password,
+  city: "Sao Paulo",
 };
 
 const selectors = {
@@ -40,6 +40,12 @@ const selectors = {
 (async () => {
   console.log(`Acessando página ...`);
   browser = await puppeteer.launch();
+
+  if (setup.email === DEFAULT.email || setup.password === DEFAULT.password) {
+    console.error("Por favor, edite o email e senha");
+    await browser.close();
+    return;
+  }
 
   await bot();
   await browser.close();
@@ -73,8 +79,11 @@ const bot = async (): Promise<void> => {
       }),
     ]);
   } catch (e) {
-    console.error(e);
-    await page.close();
+    await handleError(
+      e,
+      page,
+      "Não foi possível enviar o formulário. Tente novamente"
+    );
   }
 
   console.log(`Página de perfil ...`);
@@ -102,12 +111,14 @@ const bot = async (): Promise<void> => {
     const selectCity = await page.waitForSelector(
       selectors.appointmentPage.selectCity
     );
-    selectCity.select(selectors.appointmentPage.selectCity, setup.city);
+    selectCity.select(selectors.appointmentPage.selectCity, CITIES[setup.city]);
     await page.waitForTimeout(5000);
   } catch (e) {
-    console.info("Error ao tentar carregar o form, tente novamente");
-    console.error(e.message);
-    await page.close();
+    await handleError(
+      e,
+      page,
+      "Error ao tentar carregar o form. Tente novamente"
+    );
   }
 
   try {
@@ -118,9 +129,11 @@ const bot = async (): Promise<void> => {
     await page.waitForSelector(selectors.appointmentPage.datepicker);
     await printscreen(page);
   } catch (e) {
-    console.info("Error ao tentar carregar o input de data. Tente novamente");
-    console.error(e.message);
-    await page.close();
+    await handleError(
+      e,
+      page,
+      "Error ao tentar carregar o input de data. Tente novamente"
+    );
   }
 
   let datesResults: DateAvailable[] = [];
@@ -163,12 +176,10 @@ const bot = async (): Promise<void> => {
     }
   }
 
-  console.log("Datas disponíves:", datesResults);
-
   datesResults.map((results) => {
     console.log(
-      "results",
-      `${results.date}/${MONTHS[results.month]}/${results.year}`
+      "Datas disponíveis:",
+      `${setup.city} - ${results.date}/${MONTHS[results.month]}/${results.year}`
     );
   });
 
@@ -180,4 +191,14 @@ const printscreen = async (page: puppeteer.Page, alias = "") => {
   await page.screenshot({
     path: `./screenshots/${getUnixTime(new Date())}${alias}.png`,
   });
+};
+
+const handleError = async (
+  error: Error,
+  page: puppeteer.Page,
+  message = ""
+) => {
+  console.info(message);
+  console.error(error.message);
+  await page.close();
 };
